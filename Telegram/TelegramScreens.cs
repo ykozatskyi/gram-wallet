@@ -18,7 +18,7 @@ internal static class TelegramScreens
             .AppendLine("💎 <b>GRAM Wallet</b>")
             .AppendLine()
             .Append("Network: ").AppendLine(Esc(options.NetworkLabel))
-            .Append("Address: <code>").Append(Esc(TonAddress.Shorten(balance.Address))).AppendLine("</code>")
+            .Append("Address: <code>").Append(Esc(balance.Address)).AppendLine("</code>")
             .Append("Balance: <b>").Append(Esc(balance.Balance)).AppendLine(" GRAM</b>");
 
         if (!string.Equals(balance.Status, "active", StringComparison.Ordinal))
@@ -33,7 +33,7 @@ internal static class TelegramScreens
             .AppendLine("💎 <b>GRAM Wallet</b>")
             .AppendLine()
             .Append("Network: ").AppendLine(Esc(options.NetworkLabel))
-            .Append("Address: <code>").Append(Esc(TonAddress.Shorten(options.Wallet.NonBounceable))).AppendLine("</code>")
+            .Append("Address: <code>").Append(Esc(options.Wallet.NonBounceable)).AppendLine("</code>")
             .AppendLine("Balance: unavailable")
             .AppendLine()
             .Append("⚠️ ").Append(Esc(problem))

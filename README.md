@@ -271,9 +271,54 @@ Incoming deposits are watched about every 15 seconds. New ones are pushed to the
 
 - The mnemonic, bot token, API key, and database password stay in the environment. They are not in `appsettings.json`.
 - Logs redact configured secrets.
-- The API is bound to localhost. Put a reverse proxy in front of it if another machine must call it, and keep `X-Api-Key` on that hop.
+- The API is bound to localhost. Reach it from another machine with an [SSH tunnel](#ssh-tunnel), or put a reverse proxy in front of it. Keep `X-Api-Key` on that hop.
 - `GRAM_PAYOUT_ENABLED=false` on a fresh database leaves payouts paused. Resume them from Telegram after you have checked the address and the max payout.
 - Treat `NeedsReview` as a stop. Do not send that payout again until you have looked at the wallet on TON Viewer.
+
+## SSH tunnel
+
+The API listens on `127.0.0.1:5100` of the machine that runs it. A local port forward over SSH lets you call that port from your own computer. The connection stays inside SSH. You still send `X-Api-Key`.
+
+OpenSSH is enough. The same command works on Linux, macOS, and Windows once the OpenSSH client is installed.
+
+```bash
+ssh -N -L 5100:127.0.0.1:5100 user@host
+```
+
+| Piece | Meaning |
+| --- | --- |
+| `user` | SSH account on the machine that runs the wallet. |
+| `host` | That machine's hostname or IP. |
+| `-N` | Keep the tunnel only. Do not open a remote shell. |
+| `-L 5100:127.0.0.1:5100` | Your local port `5100` goes to `127.0.0.1:5100` on the remote machine, where the API is bound. |
+
+Leave the command running, then call the API as if it were local:
+
+```bash
+curl -sS http://127.0.0.1:5100/health
+curl -sS http://127.0.0.1:5100/api/gram/balance -H "X-Api-Key: $API_KEY"
+```
+
+If local port `5100` is already in use, pick another local port. The remote side stays `5100`:
+
+```bash
+ssh -N -L 15100:127.0.0.1:5100 user@host
+curl -sS http://127.0.0.1:15100/health
+```
+
+SSH on a port other than 22:
+
+```bash
+ssh -N -p 2222 -L 5100:127.0.0.1:5100 user@host
+```
+
+A specific private key:
+
+```bash
+ssh -N -i ~/.ssh/id_ed25519 -L 5100:127.0.0.1:5100 user@host
+```
+
+Add `-f` to send the tunnel to the background after it connects. Stop it later by ending that `ssh` process. `Ctrl+C` stops a tunnel that is still in the foreground.
 
 ## Production
 
