@@ -38,8 +38,8 @@ jobs:
           chmod 600 ~/.ssh/gram-wallet
           ssh-keyscan -p "$EC2_PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts
           scp -P "$EC2_PORT" -i ~/.ssh/gram-wallet -o IdentitiesOnly=yes \
-            gram-wallet.tar.gz deploy/gram-wallet.service \
-            "$EC2_USER@$EC2_HOST:/tmp/"
+            gram-wallet.tar.gz \
+            "$EC2_USER@$EC2_HOST:/tmp/gram-wallet.tar.gz"
           ssh -p "$EC2_PORT" -i ~/.ssh/gram-wallet -o IdentitiesOnly=yes \
             "$EC2_USER@$EC2_HOST" 'bash -s' << 'EOF'
           set -euo pipefail
@@ -53,7 +53,29 @@ jobs:
           tar -xzf /tmp/gram-wallet.tar.gz -C /tmp/gram-wallet-publish
           sudo rsync -a --delete --exclude data /tmp/gram-wallet-publish/ /opt/gram-wallet/
           sudo chown -R gram-wallet:gram-wallet /opt/gram-wallet
-          sudo install -m 644 /tmp/gram-wallet.service /etc/systemd/system/gram-wallet.service
+          sudo tee /etc/systemd/system/gram-wallet.service >/dev/null << 'UNIT'
+          [Unit]
+          Description=GRAM wallet API
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          User=gram-wallet
+          Group=gram-wallet
+          WorkingDirectory=/opt/gram-wallet
+          ExecStart=/usr/bin/dotnet /opt/gram-wallet/GramWalletService.dll
+          EnvironmentFile=/env/gram-wallet.env
+          Restart=on-failure
+          RestartSec=5
+          KillSignal=SIGINT
+          TimeoutStopSec=20
+          SyslogIdentifier=gram-wallet
+          NoNewPrivileges=true
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
           sudo systemctl daemon-reload
           sudo systemctl enable gram-wallet
           sudo systemctl restart gram-wallet
