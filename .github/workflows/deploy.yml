@@ -1,0 +1,71 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gram-wallet
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish
+        run: dotnet publish GramWalletService.csproj -c Release -o publish
+
+      - name: Pack
+        run: tar -czf gram-wallet.tar.gz -C publish .
+
+      - name: Upload and restart
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/gram-wallet
+          chmod 600 ~/.ssh/gram-wallet
+          ssh-keyscan -p "$EC2_PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          scp -P "$EC2_PORT" -i ~/.ssh/gram-wallet -o IdentitiesOnly=yes \
+            gram-wallet.tar.gz deploy/gram-wallet.service \
+            "$EC2_USER@$EC2_HOST:/tmp/"
+          ssh -p "$EC2_PORT" -i ~/.ssh/gram-wallet -o IdentitiesOnly=yes \
+            "$EC2_USER@$EC2_HOST" 'bash -s' << 'EOF'
+          set -euo pipefail
+          if ! id gram-wallet >/dev/null 2>&1; then
+            sudo useradd --system --no-create-home --shell /usr/sbin/nologin gram-wallet
+          fi
+          sudo install -d -o gram-wallet -g gram-wallet /opt/gram-wallet
+          sudo install -d -o gram-wallet -g gram-wallet /opt/gram-wallet/data
+          rm -rf /tmp/gram-wallet-publish
+          mkdir -p /tmp/gram-wallet-publish
+          tar -xzf /tmp/gram-wallet.tar.gz -C /tmp/gram-wallet-publish
+          sudo rsync -a --delete --exclude data /tmp/gram-wallet-publish/ /opt/gram-wallet/
+          sudo chown -R gram-wallet:gram-wallet /opt/gram-wallet
+          sudo install -m 644 /tmp/gram-wallet.service /etc/systemd/system/gram-wallet.service
+          sudo systemctl daemon-reload
+          sudo systemctl enable gram-wallet
+          sudo systemctl restart gram-wallet
+          rm -rf /tmp/gram-wallet-publish /tmp/gram-wallet.tar.gz /tmp/gram-wallet.service
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://127.0.0.1:5100/health; then
+              echo
+              exit 0
+            fi
+            sleep 1
+          done
+          sudo systemctl status gram-wallet --no-pager || true
+          sudo journalctl -u gram-wallet -n 80 --no-pager || true
+          exit 1
+          EOF

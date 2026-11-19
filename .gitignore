@@ -39,6 +39,14 @@ ScaffoldingReadMe.txt
 # dotenv environment variables file
 .env
 
+# payout pause flag
+data/
+
+# IDE
+.vs/
+*.user
+*.suo
+
 # Others
 ~$*
 *~
@@ -55,3 +63,6 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+.vscode/launch.json
+.vscode/tasks.json
+deploy/gram-wallet.service
